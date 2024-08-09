@@ -4,14 +4,14 @@ import { Page, Layout, Card, IndexTable, useIndexResourceState, Filters as Polar
 
 interface Order {
   id: string;
-  orderDate: string;
+  orderDate: string; // ISO 8601 format
   customerName: string;
   attributedStaffName: string;
   total: number;
-  commission: number;
+  commissionInDollars: number;
 }
 
-const fetcher = async (url: string) => {
+const fetcher = async (url: string): Promise<Order[]> => {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error('Network response was not ok');
@@ -19,7 +19,19 @@ const fetcher = async (url: string) => {
   return response.json();
 };
 
-const Filters: React.FC<{ filters: { customerName?: string; attributedStaffName?: string; dateRange?: { start: Date; end: Date } }; setFilters: (filters: any) => void }> = ({ filters, setFilters }) => {
+interface FiltersProps {
+  filters: {
+    customerName?: string;
+    attributedStaffName?: string;
+    dateRange?: {
+      start?: Date;
+      end?: Date;
+    };
+  };
+  setFilters: (filters: FiltersProps['filters']) => void;
+}
+
+const Filters: React.FC<FiltersProps> = ({ filters, setFilters }) => {
   const [customerName, setCustomerName] = useState(filters.customerName || '');
   const [attributedStaffName, setAttributedStaffName] = useState(filters.attributedStaffName || '');
   const [dateRange, setDateRange] = useState(filters.dateRange || { start: undefined, end: undefined });
@@ -110,7 +122,6 @@ const Filters: React.FC<{ filters: { customerName?: string; attributedStaffName?
                   start: dateRange.start || new Date(), // Provide default for start
                   end: dateRange.end || new Date(),     // Provide default for end
                 }} 
-               
                 multiMonth
                 allowRange
               />
@@ -143,7 +154,7 @@ const OrdersTable = ({ orders }: { orders: Order[] }) => {
       <IndexTable.Cell>{order.customerName}</IndexTable.Cell>
       <IndexTable.Cell>{order.attributedStaffName}</IndexTable.Cell>
       <IndexTable.Cell>{order.total}</IndexTable.Cell>
-      <IndexTable.Cell>{order.commission}</IndexTable.Cell>
+      <IndexTable.Cell>{order.commissionInDollars}</IndexTable.Cell>
     </IndexTable.Row>
   ));
 
@@ -179,11 +190,16 @@ const SyncButton: React.FC<{ onSync: () => void }> = ({ onSync }) => {
 
 const OrdersPage = () => {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [filters, setFilters] = useState({ customerName: '', attributedStaffName: '', dateRange: { start: undefined, end: undefined } });
+  const [filters, setFilters] = useState<{ customerName?: string; attributedStaffName?: string; dateRange?: { start?: Date; end?: Date } }>({
+    customerName: '',
+    attributedStaffName: '',
+    dateRange: { start: undefined, end: undefined },
+  });
 
   const fetchOrders = useCallback(async () => {
     try {
       const data = await fetcher('http://localhost:3000/orders');
+      console.log('Data fetched from DB:', data);
       setOrders(data);
     } catch (error) {
       console.error('Failed to fetch orders:', error);
@@ -193,13 +209,13 @@ const OrdersPage = () => {
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
-//
+
   const filteredOrders = orders.filter(order => {
     const matchesCustomerName = filters.customerName ? order.customerName.toLowerCase().includes(filters.customerName.toLowerCase()) : true;
     const matchesAttributedStaffName = filters.attributedStaffName ? order.attributedStaffName.toLowerCase().includes(filters.attributedStaffName.toLowerCase()) : true;
-    const matchesDateRange = filters.dateRange.start instanceof Date && filters.dateRange.end instanceof Date
-    ? new Date(order.orderDate) >= filters.dateRange.start && new Date(order.orderDate) <= filters.dateRange.end
-    : true;
+    const matchesDateRange = filters.dateRange?.start && filters.dateRange?.end
+      ? new Date(order.orderDate) >= filters.dateRange.start && new Date(order.orderDate) <= filters.dateRange.end
+      : true;
 
     return matchesCustomerName && matchesAttributedStaffName && matchesDateRange;
   });
